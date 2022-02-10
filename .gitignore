@@ -1,1 +1,7 @@
 precheck_results
+/caravel
+/mgmt_core_wrapper
+
+# Custom ignores
+*.vscode
+*.DS_Store
