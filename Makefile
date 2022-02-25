@@ -16,6 +16,7 @@
 
 CARAVEL_ROOT?=$(PWD)/caravel
 PRECHECK_ROOT?=${HOME}/mpw_precheck
+MCW_ROOT?=$(PWD)/mgmt_core_wrapper
 SIM ?= RTL
 
 # Install lite version of caravel, (1): caravel-lite, (0): caravel
@@ -24,11 +25,11 @@ CARAVEL_LITE?=1
 ifeq ($(CARAVEL_LITE),1) 
 	CARAVEL_NAME := caravel-lite
 	CARAVEL_REPO := https://github.com/efabless/caravel-lite 
-	CARAVEL_TAG := 'mpw-5a'
+	CARAVEL_TAG := 'mpw-5b'
 else
 	CARAVEL_NAME := caravel
 	CARAVEL_REPO := https://github.com/efabless/caravel 
-	CARAVEL_TAG := 'mpw-5a'
+	CARAVEL_TAG := 'mpw-5b'
 endif
 
 
@@ -53,13 +54,22 @@ PATTERNS=$(shell cd verilog/dv && find * -maxdepth 0 -type d)
 DV_PATTERNS = $(foreach dv, $(PATTERNS), verify-$(dv))
 TARGET_PATH=$(shell pwd)
 VERIFY_COMMAND="cd ${TARGET_PATH}/verilog/dv/$* && export SIM=${SIM} && make"
-$(DV_PATTERNS): verify-% : ./verilog/dv/% 
+
+.PHONY: dv_all
+dv_all:$(DV_PATTERNS)
+
+$(DV_PATTERNS): verify-% : ./verilog/dv/% check-env
 	docker run -v ${TARGET_PATH}:${TARGET_PATH} -v ${PDK_ROOT}:${PDK_ROOT} \
-                -v ${CARAVEL_ROOT}:${CARAVEL_ROOT} \
-                -e TARGET_PATH=${TARGET_PATH} -e PDK_ROOT=${PDK_ROOT} \
-                -e CARAVEL_ROOT=${CARAVEL_ROOT} \
-                -u $(id -u $$USER):$(id -g $$USER) efabless/dv_setup:latest \
-                sh -c $(VERIFY_COMMAND)
+		-v ${CARAVEL_ROOT}:${CARAVEL_ROOT} \
+		-e TARGET_PATH=${TARGET_PATH} -e PDK_ROOT=${PDK_ROOT} \
+		-e CARAVEL_ROOT=${CARAVEL_ROOT} \
+		-e TOOLS=/opt/riscv32i \
+		-e DESIGNS=$(TARGET_PATH) \
+		-e CORE_VERILOG_PATH=$(TARGET_PATH)/mgmt_core_wrapper/verilog \
+		-e GCC_PREFIX=riscv32-unknown-elf \
+		-e MCW_ROOT=$(MCW_ROOT) \
+		-u $$(id -u $$USER):$$(id -g $$USER) efabless/dv_setup:latest \
+		sh -c $(VERIFY_COMMAND)
 				
 # Openlane Makefile Targets
 BLOCKS = $(shell cd openlane && find * -maxdepth 0 -type d)
@@ -105,15 +115,15 @@ openlane:
 # Default installs to the user home directory, override by "export PRECHECK_ROOT=<precheck-installation-path>"
 .PHONY: precheck
 precheck:
-	@git clone --depth=1 --branch mpw-5 https://github.com/efabless/mpw_precheck.git $(PRECHECK_ROOT)
+	@git clone --depth=1 --branch mpw-5a https://github.com/efabless/mpw_precheck.git $(PRECHECK_ROOT)
 	@docker pull efabless/mpw_precheck:latest
 
 .PHONY: run-precheck
-run-precheck: check-precheck check-pdk check-caravel
+run-precheck: check-pdk check-precheck
 	$(eval INPUT_DIRECTORY := $(shell pwd))
 	cd $(PRECHECK_ROOT) && \
-	docker run -e INPUT_DIRECTORY=$(INPUT_DIRECTORY) -e PDK_ROOT=$(PDK_ROOT) -v $(PRECHECK_ROOT):$(PRECHECK_ROOT) -v $(INPUT_DIRECTORY):$(INPUT_DIRECTORY) -v $(PDK_ROOT):$(PDK_ROOT) \
-	-u $(shell id -u $(USER)):$(shell id -g $(USER)) efabless/mpw_precheck:latest bash -c "cd $(PRECHECK_ROOT) ; python3 mpw_precheck.py --pdk_root $(PDK_ROOT) --input_directory $(INPUT_DIRECTORY)"
+	docker run -v $(PRECHECK_ROOT):$(PRECHECK_ROOT) -v $(INPUT_DIRECTORY):$(INPUT_DIRECTORY) -v $(PDK_ROOT):$(PDK_ROOT) -e INPUT_DIRECTORY=$(INPUT_DIRECTORY) -e PDK_ROOT=$(PDK_ROOT) \
+	-u $(shell id -u $(USER)):$(shell id -g $(USER)) efabless/mpw_precheck:latest bash -c "cd $(PRECHECK_ROOT) ; python3 mpw_precheck.py --input_directory $(INPUT_DIRECTORY) --pdk_root $(PDK_ROOT)"
 
 # Clean 
 .PHONY: clean
