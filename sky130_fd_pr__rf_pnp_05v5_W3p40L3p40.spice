@@ -1,0 +1,5 @@
+* NGSPICE file created from sky130_fd_pr__rf_pnp_05v5_W3p40L3p40.ext - technology: minimum
+
+.subckt sky130_fd_pr__rf_pnp_05v5_W3p40L3p40
+.ends
+
